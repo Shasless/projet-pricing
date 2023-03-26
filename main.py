@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from tensorflow import keras
 from tensorflow.keras.layers import Bidirectional, Dropout, Activation, Dense, LSTM
 
+import yfinance as yf
 
 
 def black_scholes_call(S, K, T, r, sigma):
@@ -55,8 +56,19 @@ def black_scholes_put(S, K, T, r, sigma):
 
 class timeseries():
     def __init__(self,csvroute,separator=","):
-        self.df = pd.read_csv(csvroute, sep=separator)
-        self.df.dropna(inplace=True)
+        try:
+            msft = yf.Ticker("AAPL")
+            self.df = msft.history(period='3y')
+            self.df.dropna(inplace=True)
+            self.api = True
+
+        except:
+
+            self.df = pd.read_csv(csvroute, sep=separator)
+            self.df.dropna(inplace=True)
+
+
+
 
 
 
@@ -66,9 +78,10 @@ class timeseries():
         self.df.info()
 
     def setDateformat(self):
-        self.df["Date"] = pd.to_datetime(self.df["Date"])
-        self.df.sort_values(by="Date", inplace=True)
-        self.df.set_index("Date", inplace=True)
+        if not self.api:
+            self.df["Date"] = pd.to_datetime(self.df["Date"])
+            self.df.sort_values(by="Date", inplace=True)
+            self.df.set_index("Date", inplace=True)
 
     def featureselection(self,feature=['Open', 'High', 'Low', 'Close']):
         self.df = self.df[feature]
@@ -316,7 +329,7 @@ def mainProjet():
     projetPricing.plotAcf("Close",title="ACF Plot for Data")
     projetPricing.plotPacf("Close",title="PACF Plot for Data")
 
-    #projetPricing.LSTMpredict()
+    projetPricing.LSTMpredict()
 
 
 
@@ -339,3 +352,15 @@ def mainProjet():
 
 if __name__ == '__main__':
     mainProjet()
+'''
+    msft = yf.Ticker("AAPL")
+
+    # get all stock info (slow)
+    print('a')
+    print(msft.history(period="3y"))
+    print('2')
+    print(msft.dividends)
+    print('3')
+    print(msft.actions)
+    print('4')
+    print(msft.splits)'''
