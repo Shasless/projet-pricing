@@ -55,22 +55,36 @@ def black_scholes_put(S, K, T, r, sigma):
     return put
 
 class timeseries():
-    def __init__(self,csvroute,separator=","):
+    def __init__(self):
         try:
-            msft = yf.Ticker("AAPL")
-            self.df = msft.history(period='3y')
+            self.msft = yf.Ticker("AAPL")
+            self.df = self.msft.history(period='3y')
             self.df.dropna(inplace=True)
             self.api = True
 
-        except:
 
-            self.df = pd.read_csv(csvroute, sep=separator)
+        except:
+            csvroute = input("Error API accebility please enter the neme f a csv file")
+
+            self.df = pd.read_csv(csvroute, sep=",")
             self.df.dropna(inplace=True)
 
 
 
 
 
+
+    def plotCallPutt(self):
+
+        optdatte = self.msft.options[0]
+        self.opt = self.msft.option_chain(optdatte)
+
+        self.call = self.opt.calls
+        self.put = self.opt.puts
+
+
+        print(self.call.head(5))
+        print(self.put.head(5))
 
     def printSerie(self):
         print(self.df)
@@ -311,7 +325,7 @@ def get_train_test_sets(data, seq_len, train_frac):
 
 
 def mainProjet():
-    projetPricing = timeseries('AAPL.csv')
+    projetPricing = timeseries()
     projetPricing.setDateformat()
 
 
