@@ -20,12 +20,12 @@ from tensorflow.keras.layers import Bidirectional, Dropout, Activation, Dense, L
 import yfinance as yf
 
 
-def black_scholes_call(S, K, T, r, sigma):
+def black_scholes_call(S, K, T, r, sigma):#TODO reussir a integrer
     '''
 
     :param S: Asset price
     :param K: Strike price
-    :param T: Time to maturity
+    :param T: Time to maturity in year
     :param r: risk-free rate
     :param sigma: volatility
     :return: call price
@@ -37,7 +37,7 @@ def black_scholes_call(S, K, T, r, sigma):
     call = S * norm.cdf(d1) - norm.cdf(d2) * K * np.exp(-r * T)
     return call
 
-def black_scholes_put(S, K, T, r, sigma):
+def black_scholes_put(S, K, T, r, sigma): #TODO reussir a integrer
     '''
 
     :param S: Asset price
@@ -53,6 +53,48 @@ def black_scholes_put(S, K, T, r, sigma):
 
     put = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(d1)
     return put
+
+
+def vega(S, K, T, r, sigma):
+    '''
+
+    :param S: Asset price
+    :param K: Strike price
+    :param T: Time to Maturity
+    :param r: risk-free rate (treasury bills)
+    :param sigma: volatility
+    :return: partial derivative w.r.t volatility
+    '''
+
+    ### calculating d1 from black scholes
+    d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / sigma * np.sqrt(T)
+
+    vega = S * norm.pdf(d1) * np.sqrt(T)
+    print("vega")
+    print(vega)
+    return vega
+
+
+def implied_volatility_call(observed_price, S, K, T, r, tol=0.0001,
+                            max_iterations=100):
+    volatility_candidates = np.arange(0.01, 5, 0.0001)
+    price_differences = np.zeros_like(volatility_candidates)
+
+
+    for i in range(len(volatility_candidates)):
+        candidate = volatility_candidates[i]
+
+        price_differences[i] = observed_price - black_scholes_call(S, K, T, r, candidate)
+
+    idx = np.argmin(abs(price_differences))
+    implied_volatility = volatility_candidates[idx]
+    print('Implied volatility for option is:', implied_volatility, "dfgwdxfgdfg : ",min(abs(price_differences)))
+    print("dfgwdxfgdfg : ",black_scholes_call(S, K, T, r, volatility_candidates[idx]))
+
+    return 0
+
+
+
 
 class timeseries():
     def __init__(self):
@@ -71,10 +113,7 @@ class timeseries():
 
 
 
-
-
-
-    def plotCallPutt(self):
+    def plotCallPutt(self): # TODO faire quelquechose avec
 
         optdatte = self.msft.options[0]
         self.opt = self.msft.option_chain(optdatte)
@@ -157,7 +196,7 @@ class timeseries():
 
 
 
-    def ArimaPredict(self,row = "Close"): # TODO reparer
+    def ArimaPredict(self,row = "Close"): # TODO reparer si jamais c'est possible
 
         p = range(0, 6)
         d = range(1, 5)
@@ -192,7 +231,6 @@ class timeseries():
         plt.show()
 
     def SarimaPredict(self,row = "Close"):
-        # TODO calculer parametre
 
         p = range(0, 3)
         d = range(1, 2)
@@ -355,9 +393,9 @@ def mainProjet():
 
     #projetPricing.AutoArimaPredict()
 
-    #projetPricing.ArimaPredict()
+    projetPricing.ArimaPredict()
 
-    #projetPricing.SarimaPredict()
+    projetPricing.SarimaPredict()
     ''' 
     
      '''
@@ -365,7 +403,10 @@ def mainProjet():
 
 
 if __name__ == '__main__':
-    mainProjet()
+    #mainProjet()
+
+    a = implied_volatility_call(111.23, 160.25, 50, 1, 0.04)
+    print(a)
 '''
     msft = yf.Ticker("AAPL")
 
