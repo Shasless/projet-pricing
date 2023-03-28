@@ -1,4 +1,5 @@
 import itertools
+import math
 
 import numpy as np
 from scipy.stats import norm
@@ -18,65 +19,59 @@ from tensorflow import keras
 from tensorflow.keras.layers import Bidirectional, Dropout, Activation, Dense, LSTM
 
 import yfinance as yf
+import plotly.express as px
 
 
-def black_scholes_call(S, K, T, r, sigma):#TODO reussir a integrer
-    '''
+def black_scholes_call(S, K, T, r, sigma):
+    d1 = (math.log(S/K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+    d2 = d1 - sigma * math.sqrt(T)
+    Nd1 = norm.cdf(d1)
+    Nd2 = norm.cdf(d2)
+    call_price = S * Nd1 - K * math.exp(-r * T) * Nd2
+    return call_price
 
-    :param S: Asset price
-    :param K: Strike price
-    :param T: Time to maturity in year
-    :param r: risk-free rate
-    :param sigma: volatility
-    :return: call price
-    '''
+def black_scholes_put(S, K, T, r, sigma):
+    d1 = (math.log(S/K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+    d2 = d1 - sigma * math.sqrt(T)
+    Nd1 = norm.cdf(-d1)
+    Nd2 = norm.cdf(-d2)
+    put_price = K * math.exp(-r * T) * Nd2 - S * Nd1
+    return put_price
 
-    d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
+def implied_volatility(S, K, T, r, price, option_type = 'call'):
+    """
+    S: stock price
+    K: strike price
+    T: time to maturity in years
+    r: risk-free interest rate
+    price: option price
+    option_type: 'call' or 'put'
+    """
+    epsilon = 0.0001
+    sigma = 0.3
+    max_iter = 5000
+    mini = 1000000000000000000
+    defaultSigma = -1
+    for i in range(max_iter):
+        if option_type == 'call':
+            option_price = black_scholes_call(S, K, T, r, sigma)
+        elif option_type == 'put':
+            option_price = black_scholes_put(S, K, T, r, sigma)
+        diff = option_price - price
 
-    call = S * norm.cdf(d1) - norm.cdf(d2) * K * np.exp(-r * T)
-    return call
+        if abs(diff) < epsilon:
+            return sigma
 
-def black_scholes_put(S, K, T, r, sigma): #TODO reussir a integrer
-    '''
+        elif abs(diff) < mini:
+            mini = abs(diff)
+            defaultSigma = sigma
+        vega=  (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
 
-    :param S: Asset price
-    :param K: Strike price
-    :param T: Time to maturity
-    :param r: risk-free rate
-    :param sigma: volatility
-    :return: put price
-    '''
+        sigma -= diff / (vega+1e-8)
+    #print(defaultSigma)
+    return defaultSigma
 
-    d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
-
-    put = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(d1)
-    return put
-
-
-def vega(S, K, T, r, sigma):
-    '''
-
-    :param S: Asset price
-    :param K: Strike price
-    :param T: Time to Maturity
-    :param r: risk-free rate (treasury bills)
-    :param sigma: volatility
-    :return: partial derivative w.r.t volatility
-    '''
-
-    ### calculating d1 from black scholes
-    d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / sigma * np.sqrt(T)
-
-    vega = S * norm.pdf(d1) * np.sqrt(T)
-    print("vega")
-    print(vega)
-    return vega
-
-
-def implied_volatility_call(observed_price, S, K, T, r, tol=0.0001,
-                            max_iterations=100):
+def implied_volatility_call_or_put(observed_price, S, K, T, r,blackScole =black_scholes_call  ):
     volatility_candidates = np.arange(0.01, 5, 0.0001)
     price_differences = np.zeros_like(volatility_candidates)
 
@@ -84,14 +79,13 @@ def implied_volatility_call(observed_price, S, K, T, r, tol=0.0001,
     for i in range(len(volatility_candidates)):
         candidate = volatility_candidates[i]
 
-        price_differences[i] = observed_price - black_scholes_call(S, K, T, r, candidate)
+        price_differences[i] = observed_price - blackScole(S, K, T, r, candidate)
 
     idx = np.argmin(abs(price_differences))
     implied_volatility = volatility_candidates[idx]
-    print('Implied volatility for option is:', implied_volatility, "dfgwdxfgdfg : ",min(abs(price_differences)))
-    print("dfgwdxfgdfg : ",black_scholes_call(S, K, T, r, volatility_candidates[idx]))
+    print('Implied volatility for option is:', implied_volatility)
 
-    return 0
+    return implied_volatility
 
 
 
@@ -113,17 +107,30 @@ class timeseries():
 
 
 
-    def plotCallPutt(self): # TODO faire quelquechose avec
+    def plotCallPutt(self,DeltaT = 1):
 
-        optdatte = self.msft.options[0]
-        self.opt = self.msft.option_chain(optdatte)
+        df = pd.DataFrame({'lastPrice': [], 'strike': [], 'type': [], 'date': []})
 
-        self.call = self.opt.calls
-        self.put = self.opt.puts
+        for i in self.msft.options:
+            optdatte = i
 
+            opt = self.msft.option_chain(optdatte)
 
-        print(self.call.head(5))
-        print(self.put.head(5))
+            calls = opt.calls[['strike', 'lastPrice']]
+            puts = opt.puts[['strike', 'lastPrice']]
+            concatenated_df = pd.concat([calls.assign(type='calls'), puts.assign(type='puts')])
+
+            concatenated_df['date'] = i
+
+            df = pd.concat([concatenated_df, df], axis=0)
+
+        # Make 0th trace visible
+
+        fig = px.scatter(df, x="strike", y="lastPrice", animation_frame="date", color="type")
+
+        fig["layout"].pop("updatemenus")  # optional, drop animation buttons
+
+        fig.show()
 
     def printSerie(self):
         print(self.df)
@@ -404,9 +411,11 @@ def mainProjet():
 
 if __name__ == '__main__':
     #mainProjet()
+    projetPricing = timeseries()
+    projetPricing.setDateformat()
+    projetPricing.plotCallPutt()
 
-    a = implied_volatility_call(111.23, 160.25, 50, 1, 0.04)
-    print(a)
+
 '''
     msft = yf.Ticker("AAPL")
 
