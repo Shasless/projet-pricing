@@ -9,7 +9,7 @@ from statsmodels.tsa.arima.model import ARIMA
 import statsmodels.graphics.tsaplots as sgt
 from sklearn.model_selection import train_test_split
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, pacf, acf
 import pmdarima as pm
 import statsmodels.api as sm
 
@@ -20,6 +20,7 @@ from tensorflow.keras.layers import Bidirectional, Dropout, Activation, Dense, L
 
 import yfinance as yf
 import plotly.express as px
+import plotly.graph_objects as go
 
 
 def black_scholes_call(S, K, T, r, sigma):
@@ -153,11 +154,11 @@ class timeseries():
         self.df['Diff'] = self.df[row].diff()
 
     def plotrow(self,row='Open',xlabel='Year',ylabel='Price',title="graph"):
-        self.df[row].plot(figsize=(15, 5))
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.title(title)
-        plt.show()
+
+        fig = px.line(self.df, x=self.df.index, y=row,title=title)
+        fig.show()
+
+
 
     def logreturn(self,row = "Close"):
         self.df['Logreturn'] =  np.log(self.df[row] / self.df[row].shift(1)).dropna()
@@ -180,6 +181,8 @@ class timeseries():
 
 
 
+
+
     def splitTrainTest(self,test_size=0.2,row="Close"):
         self.train, self.test = train_test_split(self.df[row], test_size=test_size, shuffle=False)
 
@@ -194,10 +197,9 @@ class timeseries():
         self.df['autoArima'] = [None] * (len(self.train))+ list(test)
 
 
-        plt.plot(self.df[row], label=row)
-        plt.plot(self.df['autoArima'], label="autoArima")
-        plt.legend()
-        plt.show()
+        fig = px.line(self.df, x=self.df.index, y=[row,'autoArima'])
+        fig.show()
+
         print('If this is a straight line its mean that auto arima think this a random step')
 
 
@@ -414,6 +416,13 @@ if __name__ == '__main__':
     projetPricing = timeseries()
     projetPricing.setDateformat()
     projetPricing.plotCallPutt()
+    projetPricing.featureselection(['Close'])
+    projetPricing.difference('Close')
+    projetPricing.plotrow('Close',title="Evolution of apple")
+    projetPricing.splitTrainTest()
+
+    projetPricing.AutoArimaPredict()
+
 
 
 '''
