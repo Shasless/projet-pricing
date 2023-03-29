@@ -1,5 +1,6 @@
 import itertools
 import math
+from plotly.subplots import make_subplots
 
 import numpy as np
 from scipy.stats import norm
@@ -24,22 +25,24 @@ import plotly.graph_objects as go
 
 
 def black_scholes_call(S, K, T, r, sigma):
-    d1 = (math.log(S/K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     d2 = d1 - sigma * math.sqrt(T)
     Nd1 = norm.cdf(d1)
     Nd2 = norm.cdf(d2)
     call_price = S * Nd1 - K * math.exp(-r * T) * Nd2
     return call_price
 
+
 def black_scholes_put(S, K, T, r, sigma):
-    d1 = (math.log(S/K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
     d2 = d1 - sigma * math.sqrt(T)
     Nd1 = norm.cdf(-d1)
     Nd2 = norm.cdf(-d2)
     put_price = K * math.exp(-r * T) * Nd2 - S * Nd1
     return put_price
 
-def implied_volatility(S, K, T, r, price, option_type = 'call'):
+
+def implied_volatility(S, K, T, r, price, option_type='call'):
     """
     S: stock price
     K: strike price
@@ -66,13 +69,14 @@ def implied_volatility(S, K, T, r, price, option_type = 'call'):
         elif abs(diff) < mini:
             mini = abs(diff)
             defaultSigma = sigma
-        vega=  (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+        vega = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
 
-        sigma -= diff / (vega+1e-8)
+        sigma -= diff / (vega + 1e-8)
     return defaultSigma
 
-def implied_volatility_slow(S, K, T, r, price, option_type = 'call'):
-    volatility_candidates = np.arange(0.01, 5, 0.0001).tolist() + np.arange(5, 100, 0.5).tolist()
+
+def implied_volatility_slow(S, K, T, r, price, option_type='call'):
+    volatility_candidates = np.arange(0.01, 5, 0.0001).tolist() + np.arange(5, 100, 0.25).tolist()
     price_differences = np.zeros_like(volatility_candidates)
 
     for i in range(len(volatility_candidates)):
@@ -88,7 +92,6 @@ def implied_volatility_slow(S, K, T, r, price, option_type = 'call'):
     return volatility_candidates[idx]
 
 
-
 class timeseries():
     def __init__(self):
         try:
@@ -99,14 +102,12 @@ class timeseries():
 
 
         except:
-            csvroute = input("Error API accebility please enter the neme f a csv file")
+            csvroute = input("Error API accebility please enter the neme f a csv file but fonctioality like call put will be impossible")
 
             self.df = pd.read_csv(csvroute, sep=",")
             self.df.dropna(inplace=True)
 
-
-
-    def plotCallPutt(self,DeltaT = 1):
+    def plotCallPutt(self):
 
         df = pd.DataFrame({'lastPrice': [], 'strike': [], 'type': [], 'date': []})
 
@@ -131,7 +132,7 @@ class timeseries():
 
         fig.show()
 
-    def plotimpliedvolatibility(self,slow = True,date ='2023-06-16',r = 0.04):
+    def plotimpliedvolatibility(self, mode='slow', date='2023-06-16', r=0.04):
         implied_volatilities_calls = []
         try:
             options = self.msft.option_chain(date)
@@ -144,12 +145,18 @@ class timeseries():
         T = (pd.to_datetime(date) - pd.Timestamp.now()) / pd.Timedelta(days=365)
         regular_price = self.msft.info['regularMarketPrice']
 
-        if(slow):
+        if (mode == 'slow'):
             for i in range(len(calls)):
-                implied_volatilities_calls.append(implied_volatility_slow(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
+                implied_volatilities_calls.append(
+                    implied_volatility_slow(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
+        elif (mode == 'fast'):
+            for i in range(len(calls)):
+                implied_volatilities_calls.append(
+                    implied_volatility(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
         else:
             for i in range(len(calls)):
-                implied_volatilities_calls.append(implied_volatility(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
+                implied_volatilities_calls.append(calls['impliedVolatility'][i])
+
         fig = go.Figure()
 
         # Add scatter plot for calls
@@ -204,89 +211,98 @@ class timeseries():
             self.df.sort_values(by="Date", inplace=True)
             self.df.set_index("Date", inplace=True)
 
-    def featureselection(self,feature=['Open', 'High', 'Low', 'Close']):
+    def featureselection(self, feature=['Open', 'High', 'Low', 'Close']):
         self.df = self.df[feature]
 
-    def ressampletimeseire(self,parameter="W"):
+    def ressampletimeseire(self, parameter="W"):
         self.df = self.df.resample(parameter).mean().dropna()
 
-    def difference(self,row = "Open"):
-        self.df['Diff'] = self.df[row].diff()
+    def difference(self, row="Open"):
+        self.df['Diff'] = self.df[row].diff().dropna()
 
-    def plotrow(self,row='Open',xlabel='Year',ylabel='Price',title="graph"):
+    def plotrow(self, row='Open',  title="graph"):
 
-        fig = px.line(self.df, x=self.df.index, y=row,title=title)
+        fig = px.line(self.df, x=self.df.index, y=row, title=title)
         fig.show()
 
+    def logreturn(self, row="Close"):
+        self.df['Logreturn'] = np.log(self.df[row] / self.df[row].shift(1))
 
-
-    def logreturn(self,row = "Close"):
-        self.df['Logreturn'] =  np.log(self.df[row] / self.df[row].shift(1)).dropna()
-
-    def volatility(self,row = "Close"):
+    def volatility(self, row="Close"):
         self.df['volatility'] = self.df[row].rolling(window=2).std()
 
-    def calculpvalue(self,row='Diff'):
-        print("p-value",row, ": ",adfuller(self.df[row])[1])
+    def calculpvalue(self, row='Diff'):
+        print("p-value", row, ": ", adfuller(self.df[row])[1])
 
-    def plotPacf(self,row = "Diff",zeroValue=False,alphaValue= 0.05,title="PACF Plot for First Order Differenced Data" ):
-        sgt.plot_pacf(self.df[row], lags=np.arange((len(self.df) - 1)/2), zero=zeroValue, alpha=alphaValue)
+    def plotPacf(self, row="Diff", zeroValue=False, alphaValue=0.05, title="PACF Plot for First Order Differenced Data"):
+        pacf_values, confint = sgt.pacf(self.df[row], nlags=int((len(self.df) - 1) / 2)-2, alpha=alphaValue)
+        lags = [i for i in range(int(len(pacf_values)))]
+        fig = make_subplots()
+        fig.add_trace(go.Scatter(x=lags, y=pacf_values, mode='markers+lines', name="PACF"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False, name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 1], line=dict(dash='dash'), showlegend=False), row=1, col=1)
+        fig.update_layout(title=title, xaxis_title="Lag", yaxis_title="Partial Autocorrelation")
+        fig.show()
+
+    def plotAcf(self, row="Diff", zeroValue=False, alphaValue=0.05, title="ACF Plot for First Order Differenced Data"):
+        acf_values, confint = sgt.acf(self.df[row], nlags=len(self.df) - 1, alpha=alphaValue)
+        lags = [i for i in range(int(len(acf_values)))]
+        fig = make_subplots()
+        fig.add_trace(go.Scatter(x=lags, y=acf_values, mode='markers+lines', name="ACF"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False, name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 1], line=dict(dash='dash'), showlegend=False), row=1, col=1)
+        fig.update_layout(title=title, xaxis_title="Lag", yaxis_title="Autocorrelation")
+        fig.show()
+
+    def plotPacfPlt(self, row="Diff", zeroValue=False, alphaValue=0.05,
+                 title="PACF Plot for First Order Differenced Data"):
+        sgt.plot_pacf(self.df[row], lags=np.arange((len(self.df) - 1) / 2), zero=zeroValue, alpha=alphaValue)
         plt.title(title)
         plt.show()
 
-    def plotAcf(self,row = "Diff",zeroValue=False,alphaValue= 0.05,title = "ACF Plot for First Order Differenced Data"):
+    def plotAcfPlt(self, row="Diff", zeroValue=False, alphaValue=0.05, title="ACF Plot for First Order Differenced Data"):
+        print(self.df[row])
+        print(self.df[row].dropna())
         sgt.plot_acf(self.df[row], lags=np.arange(len(self.df) - 1), zero=zeroValue, alpha=alphaValue)
         plt.title(title)
         plt.show()
-
-
-
-
-
-    def splitTrainTest(self,test_size=0.2,row="Close"):
+    def splitTrainTest(self, test_size=0.2, row="Close"):
         self.train, self.test = train_test_split(self.df[row], test_size=test_size, shuffle=False)
 
-
-    def AutoArimaPredict(self,row = "Close"):
+    def AutoArimaPredict(self, row="Close"):
         self.auto_arima = pm.auto_arima(self.train, stepwise=False, seasonal=True)
         print(self.auto_arima.summary())
 
         test = self.auto_arima.predict(n_periods=len(self.test))
-        print( 'coucou')
+        print('coucou')
 
-        self.df['autoArima'] = [None] * (len(self.train))+ list(test)
+        self.df['autoArima'] = [None] * (len(self.train)) + list(test)
 
-
-        fig = px.line(self.df, x=self.df.index, y=[row,'autoArima'])
+        fig = px.line(self.df, x=self.df.index, y=[row, 'autoArima'])
         fig.show()
 
         print('If this is a straight line its mean that auto arima think this a random step')
 
-
-
-
-    def ArimaPredict(self,row = "Close"): # TODO reparer si jamais c'est possible
+    def ArimaPredict(self, row="Close"):  # TODO reparer si jamais c'est possible
 
         p = range(0, 6)
         d = range(1, 5)
         q = range(0, 7)
         pdq = list(itertools.product(p, d, q))
         least_MSE = 10000000000000000
-
         for param in pdq:
             try:
-                    mod = ARIMA(self.train,
-                                  order=param,
-                                  )
-                    results = mod.fit()
+                mod = ARIMA(self.train,
+                            order=param,
+                            )
+                results = mod.fit()
 
-                    if (results.mse < least_MSE):
-                        best_result = results
-                        least_MSE = results.mse
+                if (results.mse < least_MSE):
+                    best_result = results
+                    least_MSE = results.mse
 
             except:
-                    break
-                    continue
+                continue
 
 
         print(best_result.summary())
@@ -297,8 +313,7 @@ class timeseries():
         fig = px.line(self.df, x=self.df.index, y=[row, 'Arima'])
         fig.show()
 
-
-    def SarimaPredict(self,row = "Close"):
+    def SarimaPredict(self, row="Close"):
 
         p = range(0, 3)
         d = range(1, 2)
@@ -311,17 +326,16 @@ class timeseries():
             for param_seasonal in seasonal_pdq:
                 try:
                     mod = SARIMAX(self.train,
-                                                    order=param,
-                                                    seasonal_order=param_seasonal,
-                                                    enforce_stationarity=False,
-                                                    enforce_invertibility=False)
+                                  order=param,
+                                  seasonal_order=param_seasonal,
+                                  enforce_stationarity=False,
+                                  enforce_invertibility=False)
                     results = mod.fit()
-                    if(results.aic<least_AIC):
+                    if (results.aic < least_AIC):
                         best_result = results
                         least_AIC = results.aic
                 except:
                     continue
-
 
         print(best_result.summary())
 
@@ -331,16 +345,22 @@ class timeseries():
         fig = px.line(self.df, x=self.df.index, y=[row, 'Sarima'])
         fig.show()
 
+    def LSTMpredict(self, row="Close"):
 
-    def LSTMpredict(self,row="Close"):
-        # TODO REFACTO
         scaler = MinMaxScaler()
 
         close_price = self.df[row].values.reshape(-1, 1)
         scaled_close = scaler.fit_transform(close_price)
 
         seq_len = 10
-        x_train, y_train, x_test, y_test = get_train_test_sets(scaled_close, seq_len, train_frac=0.9)
+        #initialisation train and test
+        n_seq = len(scaled_close) - seq_len + 1
+        sequences = np.array([scaled_close[i:(i + seq_len)] for i in range(n_seq)])
+        n_train = int(sequences.shape[0] * 0.9)
+        x_train = sequences[:n_train, :-1, :]
+        y_train = sequences[:n_train, -1, :]
+        x_test = sequences[n_train:, :-1, :]
+        y_test = sequences[n_train:, -1, :]
 
         # fraction of the input to drop; helps prevent overfitting
         dropout = 0.2
@@ -369,13 +389,12 @@ class timeseries():
         # linear activation function: activation is proportional to the input
         model.add(Activation('linear'))
 
-
         model.compile(
             loss='mean_squared_error',
             optimizer='adam'
         )
 
-        history = model.fit(
+        model.fit(
             x_train,
             y_train,
             epochs=10,
@@ -386,15 +405,12 @@ class timeseries():
 
         y_pred = model.predict(x_test)
 
-
         # invert the scaler to get the absolute price data
         y_test_orig = scaler.inverse_transform(y_test)
         y_pred_orig = scaler.inverse_transform(y_pred)
 
-        offset = y_test_orig[0]-y_pred_orig[0]
-        y_pred_orig = y_pred_orig+offset
-
-
+        offset = y_test_orig[0] - y_pred_orig[0]
+        y_pred_orig = y_pred_orig + offset
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self.df.index[:- len(y_test_orig)],
@@ -421,40 +437,25 @@ class timeseries():
 
 
 
-
-def get_train_test_sets(data, seq_len, train_frac):
-            n_seq = len(data) - seq_len + 1
-            sequences = np.array([data[i:(i + seq_len)] for i in range(n_seq)])
-            n_train = int(sequences.shape[0] * train_frac)
-            x_train = sequences[:n_train, :-1, :]
-            y_train = sequences[:n_train, -1, :]
-            x_test = sequences[n_train:, :-1, :]
-            y_test = sequences[n_train:, -1, :]
-            return x_train, y_train, x_test, y_test
-
-
 def mainProjet():
     projetPricing = timeseries()
     projetPricing.setDateformat()
-
 
     projetPricing.featureselection(['Close'])
     projetPricing.difference('Close')
     projetPricing.logreturn()
     projetPricing.volatility()
     projetPricing.printSerie()
+    projetPricing.LSTMpredict()
+
     projetPricing.ressampletimeseire()
     projetPricing.printSerie()
     projetPricing.calculpvalue('Close')
     projetPricing.calculpvalue()
-    projetPricing.plotrow('Close','Time',title='Close price evolution over time')
-    projetPricing.plotrow('Diff','Time',title='Diff of close price evolution over time')
-    projetPricing.plotAcf("Close",title="ACF Plot for Data")
-    projetPricing.plotPacf("Close",title="PACF Plot for Data")
-
-    projetPricing.LSTMpredict()
-
-
+    projetPricing.plotrow('Close', title='Close price evolution over time')
+    projetPricing.plotrow('Diff', title='Diff of close price evolution over time')
+    projetPricing.plotAcf("Close", title="ACF Plot for Data")
+    projetPricing.plotPacf("Close", title="PACF Plot for Data")
 
 
     projetPricing.plotAcf()
@@ -462,31 +463,19 @@ def mainProjet():
 
     projetPricing.splitTrainTest()
 
-    #projetPricing.AutoArimaPredict()
+    projetPricing.AutoArimaPredict()
 
     projetPricing.ArimaPredict()
 
     projetPricing.SarimaPredict()
-    ''' 
-    
-     '''
+    projetPricing.plotCallPutt()
+    projetPricing.plotimpliedvolatibility()
+    projetPricing.plotimpliedvolatibility(mode='dfgdfg')
 
 
 
 if __name__ == '__main__':
-    #mainProjet()
-    projetPricing = timeseries()
-    projetPricing.setDateformat()
-    projetPricing.plotCallPutt()
-    projetPricing.plotimpliedvolatibility()
-    projetPricing.featureselection(['Close'])
-    projetPricing.difference('Close')
-    #projetPricing.plotrow('Close',title="Evolution of apple")
-    #projetPricing.splitTrainTest()
-    #projetPricing.LSTMpredict()
-
-    #projetPricing.AutoArimaPredict()
-
+    mainProjet()
 
 
 '''
