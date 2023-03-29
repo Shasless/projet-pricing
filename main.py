@@ -69,25 +69,23 @@ def implied_volatility(S, K, T, r, price, option_type = 'call'):
         vega=  (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
 
         sigma -= diff / (vega+1e-8)
-    #print(defaultSigma)
     return defaultSigma
 
-def implied_volatility_call_or_put(observed_price, S, K, T, r,blackScole =black_scholes_call  ):
-    volatility_candidates = np.arange(0.01, 5, 0.0001)
+def implied_volatility_slow(S, K, T, r, price, option_type = 'call'):
+    volatility_candidates = np.arange(0.01, 5, 0.0001).tolist() + np.arange(5, 100, 0.5).tolist()
     price_differences = np.zeros_like(volatility_candidates)
-
 
     for i in range(len(volatility_candidates)):
         candidate = volatility_candidates[i]
+        if option_type == 'call':
+            price_differences[i] = price - black_scholes_call(S, K, T, r, candidate)
 
-        price_differences[i] = observed_price - blackScole(S, K, T, r, candidate)
+        elif option_type == 'put':
+            price_differences[i] = price - black_scholes_put(S, K, T, r, candidate)
 
     idx = np.argmin(abs(price_differences))
-    implied_volatility = volatility_candidates[idx]
-    print('Implied volatility for option is:', implied_volatility)
 
-    return implied_volatility
-
+    return volatility_candidates[idx]
 
 
 
@@ -130,6 +128,68 @@ class timeseries():
         fig = px.scatter(df, x="strike", y="lastPrice", animation_frame="date", color="type")
 
         fig["layout"].pop("updatemenus")  # optional, drop animation buttons
+
+        fig.show()
+
+    def plotimpliedvolatibility(self,slow = True,date ='2023-06-16',r = 0.04):
+        implied_volatilities_calls = []
+        try:
+            options = self.msft.option_chain(date)
+        except:
+            date = self.msft.options[0]
+
+            options = self.msft.option_chain(date)
+
+        calls = options.calls
+        T = (pd.to_datetime(date) - pd.Timestamp.now()) / pd.Timedelta(days=365)
+        regular_price = self.msft.info['regularMarketPrice']
+
+        if(slow):
+            for i in range(len(calls)):
+                implied_volatilities_calls.append(implied_volatility_slow(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
+        else:
+            for i in range(len(calls)):
+                implied_volatilities_calls.append(implied_volatility(regular_price, calls['strike'][i], T, r, calls['lastPrice'][i]))
+        fig = go.Figure()
+
+        # Add scatter plot for calls
+        fig.add_trace(go.Scatter(
+            x=calls['strike'],
+            y=calls['lastPrice'],
+            mode='markers',
+            marker=dict(color='red'),
+            name='Calls'
+        ))
+
+        # Add line plot for implied volatilities of calls
+        fig.add_trace(go.Scatter(
+            x=calls['strike'],
+            y=implied_volatilities_calls,
+            mode='lines',
+            line=dict(color='blue'),
+            name='Implied Volatility call',
+            yaxis='y2'
+        ))
+
+        # Set axis labels
+        fig.update_layout(
+            xaxis_title='Strike Price',
+            yaxis=dict(title='Option Price'),
+            yaxis2=dict(title='Implied Volatility', overlaying='y', side='right'),
+        )
+
+        # Add legend
+        fig.update_layout(
+            legend=dict(
+                x=0,
+                y=1,
+                traceorder='normal',
+                font=dict(size=10),
+                bgcolor='LightSteelBlue',
+                bordercolor='Black',
+                borderwidth=1
+            )
+        )
 
         fig.show()
 
@@ -234,10 +294,9 @@ class timeseries():
         forecast_test = best_result.forecast(len(self.test))
         self.df['Arima'] = [None] * len(self.train) + list(forecast_test)
 
-        plt.plot(self.df[row], label=row)
-        plt.plot(self.df['Arima'], label="Arima")
-        plt.legend()
-        plt.show()
+        fig = px.line(self.df, x=self.df.index, y=[row, 'Arima'])
+        fig.show()
+
 
     def SarimaPredict(self,row = "Close"):
 
@@ -269,10 +328,9 @@ class timeseries():
         forecast_test = best_result.forecast(len(self.test))
         self.df['Sarima'] = [None] * len(self.train) + list(forecast_test)
 
-        plt.plot(self.df[row], label=row)
-        plt.plot(self.df['Sarima'], label="Sarima")
-        plt.legend()
-        plt.show()
+        fig = px.line(self.df, x=self.df.index, y=[row, 'Sarima'])
+        fig.show()
+
 
     def LSTMpredict(self,row="Close"):
         # TODO REFACTO
@@ -328,6 +386,7 @@ class timeseries():
 
         y_pred = model.predict(x_test)
 
+
         # invert the scaler to get the absolute price data
         y_test_orig = scaler.inverse_transform(y_test)
         y_pred_orig = scaler.inverse_transform(y_pred)
@@ -335,28 +394,31 @@ class timeseries():
         offset = y_test_orig[0]-y_pred_orig[0]
         y_pred_orig = y_pred_orig+offset
 
-        # plots of prediction against actual data
-        plt.plot(y_test_orig, label='Actual Price', color='orange')
-        plt.plot(y_pred_orig, label='Predicted Price', color='green')
 
-        plt.title(' Price Prediction')
-        plt.xlabel('Days')
-        plt.ylabel('Price')
-        plt.legend(loc='best')
 
-        plt.show()
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=self.df.index[:- len(y_test_orig)],
+                                 y=scaler.inverse_transform(y_train).reshape(-1),
+                                 name='Historical Price',
+                                 line=dict(color='brown')
+                                 ))
+        fig.add_trace(go.Scatter(x=self.df.index[len(y_train):],
+                                 y=y_test_orig.reshape(-1),
+                                 name='Actual Price',
+                                 line=dict(color='orange')
+                                 ))
+        fig.add_trace(go.Scatter(x=self.df.index[len(y_train):],
+                                 y=y_pred_orig.reshape(-1),
+                                 name='Predicted Price LSTM',
+                                 line=dict(color='green')
+                                 ))
 
-        plt.plot(np.arange(0, len(y_train)), scaler.inverse_transform(y_train), color='brown', label='Historical Price')
-        plt.plot(np.arange(len(y_train), len(y_train) + len(y_test_orig)), y_test_orig, color='orange',
-                 label='Actual Price')
-        plt.plot(np.arange(len(y_train), len(y_train) + len(y_pred_orig)), y_pred_orig, color='green',
-                 label='Predicted Price')
+        fig.update_layout(title='Prices',
+                          xaxis_title='Days',
+                          yaxis_title='Price',
+                          legend=dict(x=0.7, y=0.9))
+        fig.show()
 
-        plt.title(' Prices')
-        plt.xlabel('Days')
-        plt.ylabel('Price ')
-        plt.legend()
-        plt.show();
 
 
 
@@ -416,12 +478,14 @@ if __name__ == '__main__':
     projetPricing = timeseries()
     projetPricing.setDateformat()
     projetPricing.plotCallPutt()
+    projetPricing.plotimpliedvolatibility()
     projetPricing.featureselection(['Close'])
     projetPricing.difference('Close')
-    projetPricing.plotrow('Close',title="Evolution of apple")
-    projetPricing.splitTrainTest()
+    #projetPricing.plotrow('Close',title="Evolution of apple")
+    #projetPricing.splitTrainTest()
+    #projetPricing.LSTMpredict()
 
-    projetPricing.AutoArimaPredict()
+    #projetPricing.AutoArimaPredict()
 
 
 
