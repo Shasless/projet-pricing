@@ -102,10 +102,21 @@ class timeseries():
 
 
         except:
-            csvroute = input("Error API accebility please enter the neme f a csv file but fonctioality like call put will be impossible")
+            csvroute = input(
+                "Error API accebility please enter the neme f a csv file but fonctioality like call put will be impossible")
 
             self.df = pd.read_csv(csvroute, sep=",")
             self.df.dropna(inplace=True)
+
+    def candleStickChart(self):
+
+        fig = go.Figure(data=[go.Candlestick(x=self.df.index,
+                                             open=self.df['Open'],
+                                             high=self.df['High'],
+                                             low=self.df['Low'],
+                                             close=self.df['Close'])])
+
+        fig.show()
 
     def plotCallPutt(self):
 
@@ -220,7 +231,7 @@ class timeseries():
     def difference(self, row="Open"):
         self.df['Diff'] = self.df[row].diff().dropna()
 
-    def plotrow(self, row='Open',  title="graph"):
+    def plotColumn(self, row='Open', title="graph"):
 
         fig = px.line(self.df, x=self.df.index, y=row, title=title)
         fig.show()
@@ -234,12 +245,14 @@ class timeseries():
     def calculpvalue(self, row='Diff'):
         print("p-value", row, ": ", adfuller(self.df[row])[1])
 
-    def plotPacf(self, row="Diff", zeroValue=False, alphaValue=0.05, title="PACF Plot for First Order Differenced Data"):
-        pacf_values, confint = sgt.pacf(self.df[row], nlags=int((len(self.df) - 1) / 2)-2, alpha=alphaValue)
+    def plotPacf(self, row="Diff", zeroValue=False, alphaValue=0.05,
+                 title="PACF Plot for First Order Differenced Data"):
+        pacf_values, confint = sgt.pacf(self.df[row], nlags=int((len(self.df) - 1) / 2) - 2, alpha=alphaValue)
         lags = [i for i in range(int(len(pacf_values)))]
         fig = make_subplots()
         fig.add_trace(go.Scatter(x=lags, y=pacf_values, mode='markers+lines', name="PACF"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False, name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False,
+                                 name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
         fig.add_trace(go.Scatter(x=lags, y=confint[:, 1], line=dict(dash='dash'), showlegend=False), row=1, col=1)
         fig.update_layout(title=title, xaxis_title="Lag", yaxis_title="Partial Autocorrelation")
         fig.show()
@@ -249,23 +262,24 @@ class timeseries():
         lags = [i for i in range(int(len(acf_values)))]
         fig = make_subplots()
         fig.add_trace(go.Scatter(x=lags, y=acf_values, mode='markers+lines', name="ACF"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False, name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=lags, y=confint[:, 0], line=dict(dash='dash'), showlegend=False,
+                                 name=f"Confidence Interval ({alphaValue})"), row=1, col=1)
         fig.add_trace(go.Scatter(x=lags, y=confint[:, 1], line=dict(dash='dash'), showlegend=False), row=1, col=1)
         fig.update_layout(title=title, xaxis_title="Lag", yaxis_title="Autocorrelation")
         fig.show()
 
     def plotPacfPlt(self, row="Diff", zeroValue=False, alphaValue=0.05,
-                 title="PACF Plot for First Order Differenced Data"):
+                    title="PACF Plot for First Order Differenced Data"):
         sgt.plot_pacf(self.df[row], lags=np.arange((len(self.df) - 1) / 2), zero=zeroValue, alpha=alphaValue)
         plt.title(title)
         plt.show()
 
-    def plotAcfPlt(self, row="Diff", zeroValue=False, alphaValue=0.05, title="ACF Plot for First Order Differenced Data"):
-        print(self.df[row])
-        print(self.df[row].dropna())
+    def plotAcfPlt(self, row="Diff", zeroValue=False, alphaValue=0.05,
+                   title="ACF Plot for First Order Differenced Data"):
         sgt.plot_acf(self.df[row], lags=np.arange(len(self.df) - 1), zero=zeroValue, alpha=alphaValue)
         plt.title(title)
         plt.show()
+
     def splitTrainTest(self, test_size=0.2, row="Close"):
         self.train, self.test = train_test_split(self.df[row], test_size=test_size, shuffle=False)
 
@@ -303,7 +317,6 @@ class timeseries():
 
             except:
                 continue
-
 
         print(best_result.summary())
 
@@ -353,7 +366,7 @@ class timeseries():
         scaled_close = scaler.fit_transform(close_price)
 
         seq_len = 10
-        #initialisation train and test
+        # initialisation train and test
         n_seq = len(scaled_close) - seq_len + 1
         sequences = np.array([scaled_close[i:(i + seq_len)] for i in range(n_seq)])
         n_train = int(sequences.shape[0] * 0.9)
@@ -436,48 +449,50 @@ class timeseries():
         fig.show()
 
 
-
 def mainProjet():
     projetPricing = timeseries()
     projetPricing.setDateformat()
 
     projetPricing.featureselection(['Close'])
     projetPricing.difference('Close')
-    projetPricing.logreturn()
-    projetPricing.volatility()
-    projetPricing.printSerie()
-    projetPricing.LSTMpredict()
+    projetPricing.plotColumn('Close', title='Close price evolution over time')
+    projetPricing.plotColumn('Diff', title='Diff of close price evolution over time')
+    # projetPricing.logreturn()
+    # projetPricing.volatility()
+    # projetPricing.printSerie()
+    # projetPricing.LSTMpredict()
 
     projetPricing.ressampletimeseire()
     projetPricing.printSerie()
-    projetPricing.calculpvalue('Close')
-    projetPricing.calculpvalue()
-    projetPricing.plotrow('Close', title='Close price evolution over time')
-    projetPricing.plotrow('Diff', title='Diff of close price evolution over time')
-    projetPricing.plotAcf("Close", title="ACF Plot for Data")
-    projetPricing.plotPacf("Close", title="PACF Plot for Data")
+    # projetPricing.calculpvalue('Close')
+    # projetPricing.calculpvalue()
 
+    projetPricing.plotAcfPlt("Close", title="ACF Plot for Close")
+    projetPricing.plotPacfPlt("Close", title="PACF Plot for Close")
+    projetPricing.plotAcfPlt("Diff", title="ACF Plot for Diff")
+    projetPricing.plotPacfPlt("Diff", title="PACF Plot for Diff")
 
-    projetPricing.plotAcf()
-    projetPricing.plotPacf()
-
-    projetPricing.splitTrainTest()
-
-    projetPricing.AutoArimaPredict()
-
-    projetPricing.ArimaPredict()
-
-    projetPricing.SarimaPredict()
-    projetPricing.plotCallPutt()
-    projetPricing.plotimpliedvolatibility()
-    projetPricing.plotimpliedvolatibility(mode='dfgdfg')
-
+    #
+    # projetPricing.plotAcf()
+    # projetPricing.plotPacf()
+    #
+    # projetPricing.splitTrainTest()
+    #
+    # projetPricing.AutoArimaPredict()
+    #
+    # projetPricing.ArimaPredict()
+    #
+    # projetPricing.SarimaPredict()
+    # projetPricing.plotCallPutt()
+    # projetPricing.plotimpliedvolatibility()
+    # projetPricing.plotimpliedvolatibility(mode='dfgdfg')
 
 
 if __name__ == '__main__':
-    mainProjet()
-
-
+    #mainProjet()
+    projetPricing = timeseries()
+    projetPricing.setDateformat()
+    projetPricing.candleStickChart()
 '''
     msft = yf.Ticker("AAPL")
 
