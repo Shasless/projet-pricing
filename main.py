@@ -143,6 +143,45 @@ class timeseries():
 
         fig.show()
 
+    def verifypriceoption(self, r=0.04):
+
+
+        regular_price = self.msft.info['regularMarketPrice']
+
+
+        df = pd.DataFrame({'lastPrice': [], 'strike': [], 'type': [], 'date': []})
+
+        for i in self.msft.options:
+            calulated_price = pd.DataFrame({'lastPrice': [], 'strike': []})
+
+            optdatte = i
+
+            opt = self.msft.option_chain(optdatte)
+            calls = opt.calls[['strike', 'lastPrice']]
+            T = (pd.to_datetime(optdatte) - pd.Timestamp.now()) / pd.Timedelta(days=365)
+
+            for j in range(len(calls)):
+
+                price = black_scholes_call(regular_price, calls['strike'][j], T, r, opt.calls['impliedVolatility'][j])
+                new_row = {'strike' : calls['strike'][j] ,'lastPrice': price}
+                calulated_price.loc[len(calulated_price)] = new_row
+
+            concatenated_df = pd.concat([calls.assign(type='baseprice'), calulated_price.assign(type='BlackScolesPrice')])
+
+            concatenated_df['date'] = i
+
+            df = pd.concat([concatenated_df, df], axis=0)
+
+        # Make 0th trace visible
+
+        fig = px.scatter(df, x="strike", y="lastPrice", animation_frame="date", color="type")
+
+        fig["layout"].pop("updatemenus")  # optional, drop animation buttons
+
+        fig.show()
+
+
+
     def plotimpliedvolatibility(self, mode='slow', date='2023-06-16', r=0.04):
         implied_volatilities_calls = []
         try:
@@ -326,6 +365,22 @@ class timeseries():
         fig = px.line(self.df, x=self.df.index, y=[row, 'Arima'])
         fig.show()
 
+    def ArimaPredictPerso(self, row="Close",p=1,d=1,q=1):  # TODO reparer si jamais c'est possible
+
+
+        mod = ARIMA(self.train,order=(p,d,q))
+        results = mod.fit()
+
+
+
+        print(results.summary())
+
+        forecast_test = results.forecast(len(self.test))
+        self.df['Arima'] = [None] * len(self.train) + list(forecast_test)
+
+        fig = px.line(self.df, x=self.df.index, y=[row, 'Arima'])
+        fig.show()
+
     def SarimaPredict(self, row="Close"):
 
         p = range(0, 3)
@@ -451,32 +506,34 @@ class timeseries():
 
 def mainProjet():
     projetPricing = timeseries()
-    projetPricing.setDateformat()
-
+    projetPricing.verifypriceoption()
+    # projetPricing.setDateformat()
+    #
     projetPricing.featureselection(['Close'])
     projetPricing.difference('Close')
-    projetPricing.plotColumn('Close', title='Close price evolution over time')
-    projetPricing.plotColumn('Diff', title='Diff of close price evolution over time')
+    # projetPricing.plotColumn('Close', title='Close price evolution over time')
+    # projetPricing.plotColumn('Diff', title='Diff of close price evolution over time')
     # projetPricing.logreturn()
     # projetPricing.volatility()
     # projetPricing.printSerie()
     # projetPricing.LSTMpredict()
 
-    projetPricing.ressampletimeseire()
-    projetPricing.printSerie()
+    # projetPricing.ressampletimeseire()
+    # projetPricing.printSerie()
     # projetPricing.calculpvalue('Close')
     # projetPricing.calculpvalue()
 
-    projetPricing.plotAcfPlt("Close", title="ACF Plot for Close")
-    projetPricing.plotPacfPlt("Close", title="PACF Plot for Close")
-    projetPricing.plotAcfPlt("Diff", title="ACF Plot for Diff")
-    projetPricing.plotPacfPlt("Diff", title="PACF Plot for Diff")
+    # projetPricing.plotAcfPlt("Close", title="ACF Plot for Close")
+    # projetPricing.plotPacfPlt("Close", title="PACF Plot for Close")
+    # projetPricing.plotAcfPlt("Diff", title="ACF Plot for Diff")
+    # projetPricing.plotPacfPlt("Diff", title="PACF Plot for Diff")
 
     #
     # projetPricing.plotAcf()
     # projetPricing.plotPacf()
     #
-    # projetPricing.splitTrainTest()
+    projetPricing.splitTrainTest()
+    projetPricing.ArimaPredictPerso()
     #
     # projetPricing.AutoArimaPredict()
     #
@@ -489,10 +546,10 @@ def mainProjet():
 
 
 if __name__ == '__main__':
-    #mainProjet()
-    projetPricing = timeseries()
-    projetPricing.setDateformat()
-    projetPricing.candleStickChart()
+    mainProjet()
+    # projetPricing = timeseries()
+    # projetPricing.setDateformat()
+    # projetPricing.candleStickChart()
 '''
     msft = yf.Ticker("AAPL")
 
